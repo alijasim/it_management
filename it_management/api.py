@@ -14,6 +14,16 @@ def cleanName(name):
 
     return name
 
+def color_variant(hex_color, brightness_offset=50):
+    """ takes a color like #87c95f and produces a lighter or darker variant """
+    if len(hex_color) != 7:
+        raise Exception("Passed %s into color_variant(), needs to be in #87c95f format." % hex_color)
+    rgb_hex = [hex_color[x:x+2] for x in [1, 3, 5]]
+    new_rgb_int = [int(hex_value, 16) + brightness_offset for hex_value in rgb_hex]
+    new_rgb_int = [min([255, max([0, i])]) for i in new_rgb_int] # make sure new values are between 0 and 255
+    # hex() produces "0x88", we want just "88"
+    return "#" + "".join([hex(i)[2:] for i in new_rgb_int])
+
 @frappe.whitelist()
 def fetch_calendars(data):
     #Check if called from client side (not necessary)
@@ -79,46 +89,125 @@ def sync_calendar(data):
             #Type conversions
             if(type(vev.dtstart.value) is datetime.date):
                 vev.dtstart.value = datetime.datetime(year=vev.dtstart.value.year, month=vev.dtstart.value.month, day=vev.dtstart.value.day)
-            if(type(vev.dtend.value) is datetime.date):
-                vev.dtend.value = datetime.datetime(year=vev.dtend.value.year, month=vev.dtend.value.month, day=vev.dtend.value.day)
+            if(hasattr(vev,"dtend")):
+                if(type(vev.dtend.value) is datetime.date):
+                    vev.dtend.value = datetime.datetime(year=vev.dtend.value.year, month=vev.dtend.value.month, day=vev.dtend.value.day)
 
+            #Insert log statement
             print("Inserting " + vev.summary.value + " from " + str(vev.dtstart.value.date()))
+            
+            #Berechne Dinge
+            if(hasattr(vev,"dtstart") and hasattr(vev,"dtend")):
+                timedelta = vev.dtend.value - vev.dtstart.value
+                days = (vev.dtend.value.date() - vev.dtstart.value.date()).days
+            elif(hasattr(vev,"dtstart") and hasattr(vev,"duration")):
+                timedelta = vev.duration.value
+                days = ((vev.dtstart.value + vev.duration.value).date() - vev.dtstart.value.date()).days
 
             #Default
-            if(vev.dtstart.value.date() == vev.dtend.value.date()):
-                doc = frappe.new_doc("Event")
-                doc.subject = vev.summary.value
-                doc.starts_on = vev.dtstart.value.strftime("%Y-%m-%d %H:%M:%S")
-                if(hasattr(vev,"dtend")):
-                    doc.ends_on = vev.dtend.value.strftime("%Y-%m-%d %H:%M:%S")
-                    print(doc.ends_on)
-                elif(hasattr(vev,"duration")):
-                    doc.ends_on = (vev.dtstart.value + vev.duration.value).strftime("%Y-%m-%d %H:%M:%S")
-                doc.event_type = "Public"
-                doc.uid = vev.uid.value
-                doc.caldav_calendar = data["caldavcalendar"]
+            insertable = False
+            doc = frappe.new_doc("Event")
+            doc.subject = vev.summary.value
+            doc.starts_on = vev.dtstart.value.strftime("%Y-%m-%d %H:%M:%S")
+            doc.event_type = "Public"
+            doc.uid = vev.uid.value
+            doc.caldav_calendar = data["caldavcalendar"]
+            if(hasattr(vev,"description")):
+                doc.description = vev.description.value
+
+            #Meta
+            if(hasattr(vev,"transp")):
+                if(vev.transp.value == "TRANSPARENT"):
+                    doc.color = color_variant(data["color"])
+                elif(vev.transp.value == "OPAQUE"):
+                    doc.color = data["color"]
+                else:
+                    doc.color = data["color"]
+            
+            if(hasattr(vev,"status")):
+                #print("Status: " + vev.status.value)
+                pass
+
+            if(hasattr(vev,"organizer")):
+                #print("Organizer: " + vev.organizer.value)
+                pass
+
+            if(hasattr(vev,"attendee")):
+                #vev.prettyPrint()
+                pass
+
+            if(hasattr(vev, "sequence")):
+                #print("Sequence: " + vev.sequence.value)
+                pass
+
+            if(hasattr(vev,"location")):
+                #print("Location: " + vev.location.value)
+                pass
+
+            if(hasattr(vev, "class")):
+                pass
+
+            #Case: has dtend, within a day
+            if((hasattr(vev,"dtend") and days == 1)):
+                doc.ends_on = vev.dtend.value.strftime("%Y-%m-%d %H:%M:%S")
+                insertable = True
+            #Case: has duration, within a day
+            elif(hasattr(vev,"duration") and days == 1 ):
+                doc.ends_on = (vev.dtstart.value + vev.duration.value).strftime("%Y-%m-%d %H:%M:%S")
+                insertable = True
+            #Case: Allday, one day
+            elif((timedelta.seconds / 3600) == 1.0 and vev.dtstart.value.hour == 0 and vev.dtstart.value.minute == 0):
+                doc.ends_on = ""
+                doc.all_day = 1
+                insertable = True
+            #Case: Allday, more than one day
+            #elif((timedelta.seconds / 3600) == int(timedelta.seconds / 3600)):
+                #doc.
+            #Case: has dtend, not within a day
+            #elif((hasattr(vev,"dtend") and days > 1)):
+                #doc.ends_on = vev.dtstart.value.date().strftime("%Y-%m-%d %H:%M:%S")
+                #for i in days - 2:
+                #    insert_a_whole_day(vev)
+                #insert_from_midnight_to_hour(vev)
+            #Case: Not within a day, has duration
+            #elif((hasattr(vev,"duration") and days > 1)):
+                #doc.ends_on = vev.dtstart.value.date().strftime("%Y-%m-%d %H:%M:%S")
+                #for i in days - 2:
+                #    insert_a_whole_day(vev)
+                #insert_from_midnight_to_hour(vev)
+            
+            #Repeating Events
+            if(hasattr(vev,"rrule")):
+                insertable = False
+                #print(type(vev.rrule))
+                #print(type(vev.rrule.value))
+                #print(dir(vev.rrule.value))
+                #print(vev.rrule.value)
+
+            if(hasattr(vev,"exdate")):
+                insertable = False
+                #print(type(vev.exdate))
+                #print(type(vev.exdate.value))
+
+            #If insertable insert
+            if(insertable):
                 if(hasattr(vev,"last_modified")):
                     doc.last_modified = vev.last_modified.value.strftime("%Y-%m-%d %H:%M:%S")
                 if(hasattr(vev,"created")):
                     doc.created_on = vev.created.value.strftime("%Y-%m-%d %H:%M:%S")
-                
-                #Meta
-                if(hasattr(data,"color")):
-                    doc.color = data["color"]
-                
                 doc.insert(
-                    ignore_permissions=False, # ignore write permissions during insert
-                    ignore_links=True, # ignore Link validation in the document
-                    ignore_if_duplicate=True, # dont insert if DuplicateEntryError is thrown
-                    ignore_mandatory=False # insert even if mandatory fields are not set
+                        ignore_permissions=False, # ignore write permissions during insert
+                        ignore_links=True, # ignore Link validation in the document
+                        ignore_if_duplicate=True, # dont insert if DuplicateEntryError is thrown
+                        ignore_mandatory=False # insert even if mandatory fields are not set
                 )
                 nsuccess = nsuccess + 1
+            else:
+                vev.prettyPrint()
 
-            #Check if all day (starts midnight day 1 ends midnight day 2)
 
-        except:
-            print(dir(vev))
-            print(type(vev.duration.value))
+        except Exception as ex:
+            print(str(ex))
             vev.prettyPrint()
 
             #frappe.sendmail...
