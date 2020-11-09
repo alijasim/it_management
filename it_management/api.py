@@ -175,19 +175,35 @@ def sync_calendar(data):
                 #for i in days - 2:
                 #    insert_a_whole_day(vev)
                 #insert_from_midnight_to_hour(vev)
-            
-            #Repeating Events
+
             if(hasattr(vev,"rrule")):
-                insertable = False
+                dates = list(vev.getrruleset()) #this is potentially infinite
+                for date in dates:
+            
+            #!--------- EXPERIMENTAL RULEMAPPING ------------------
+            #Repeating Events
+            #if(hasattr(vev,"rrule")):
+                #insertable = False
                 #print(type(vev.rrule))
                 #print(type(vev.rrule.value))
                 #print(dir(vev.rrule.value))
                 #print(vev.rrule.value)
 
-            if(hasattr(vev,"exdate")):
-                insertable = False
+            #if(hasattr(vev,"exdate")):
+                #insertable = False
                 #print(type(vev.exdate))
                 #print(type(vev.exdate.value))
+
+            #Note: Wann kann ich mappen? 
+            #Ausschlusskriterium:
+            # EXDATE
+            # COUNT mod 7 != 0
+            # INTERVAL
+            # ...
+            #Positivkriterien:
+            #FREQ (WEEKLY) and (COUNT mod 7 == 0 or UNTIL) and optionally BYDAY
+            #FREQ (DAILY) ...
+            #!------------------------------------------------------
 
             #If insertable insert
             if(insertable):
