@@ -194,7 +194,7 @@ def sync_calendar(data):
                 #print(type(vev.exdate))
                 #print(type(vev.exdate.value))
 
-            #Note: Wann kann ich mappen? 
+            #Note: Wann kann ich mappen? https://www.kanzaki.com/docs/ical/recur.html
             #Ausschlusskriterium:
             # EXDATE
             # COUNT mod 7 != 0
