@@ -8,17 +8,13 @@ frappe.ui.form.on('CalDav Calendar', {
 		}
 	},
 	sync_calendar: function(frm){
-
-		let account = frappe.get_doc("CalDav Account",frm.doc.caldav_account);
-
 		frappe.call({
 			method: "it_management.api.sync_calendar",
 			args : { 'data' : {
-				"url" : account.url,
-				"username" : account.username,
-				"password" : account.password,
+				"caldavaccount" : frm.doc.caldav_account,
 				"calendarurl" : frm.doc.calendar_url,
-				"caldavcalendar" : frm.doc.name
+				"caldavcalendar" : frm.doc.name,
+				"color" : frm.doc.color
 			   }
 			},
 			callback: function(response_json){

@@ -54,7 +54,8 @@ def sync_calendar(data):
         data = json.loads(data)
 
     #Connect to CalDav Account
-    client = caldav.DAVClient(url=data["url"], username=data["username"], password=data["password"])
+    account = frappe.get_doc("CalDav Account", data["caldavaccount"])
+    client = caldav.DAVClient(url=account.url, username=account.username, password=account.password)
     principal = client.principal()
     calendars = principal.calendars()
 
@@ -83,7 +84,7 @@ def sync_calendar(data):
 
             print("Inserting " + vev.summary.value + " from " + str(vev.dtstart.value.date()))
 
-            #Check if same day
+            #Default
             if(vev.dtstart.value.date() == vev.dtend.value.date()):
                 doc = frappe.new_doc("Event")
                 doc.subject = vev.summary.value
@@ -101,6 +102,10 @@ def sync_calendar(data):
                 if(hasattr(vev,"created")):
                     doc.created_on = vev.created.value.strftime("%Y-%m-%d %H:%M:%S")
                 
+                #Meta
+                if(hasattr(data,"color")):
+                    doc.color = data["color"]
+                
                 doc.insert(
                     ignore_permissions=False, # ignore write permissions during insert
                     ignore_links=True, # ignore Link validation in the document
@@ -112,7 +117,11 @@ def sync_calendar(data):
             #Check if all day (starts midnight day 1 ends midnight day 2)
 
         except:
+            print(dir(vev))
+            print(type(vev.duration.value))
             vev.prettyPrint()
+
+            #frappe.sendmail...
     
     print("Events total: " + str(nvalid) + " Synced: " + str(nsuccess))
 
